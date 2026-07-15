@@ -79,6 +79,69 @@ src/
                          #   SideRays, GlassSurface, PixelCard, etc.)
 ```
 
+
+
+## System Architecture
+
+### User Registration & Smart Account Creation
+
+```mermaid
+flowchart TD
+
+subgraph UC["User Account Creation"]
+
+A([Start]) -->|Firebase Authentication| B[Create User Account<br/>Google / Email]
+
+B --> C[Face Recognition]
+C --> D[Generate Face Vector]
+
+B -->|ERC-4337| E[Create Smart Account]
+
+E --> F[Wallet Address]
+E --> G[Address QR Code]
+E --> H[Session Key]
+
+E --> I[Permission Manager]
+I --> I1[Spending Limit]
+I --> I2[Expiry Time]
+I --> I3[Allowed Tokens / Merchants]
+
+end
+```
+
+### End-to-End dApp Payment Workflow
+
+```mermaid
+flowchart TD
+
+subgraph DP["End-to-End dApp Payment Workflow"]
+
+J[Scan QR]
+J --> K[Fetch Wallet Address]
+
+K --> L[x402 Create Payment Request]
+
+L --> M[Session Key]
+
+M --> N[ECDSA Signature]
+
+N --> O[Create & Sign UserOperation]
+
+O --> P[Validate Biometrics]
+
+P -->|Success| Q[ERC-4337 Smart Account]
+
+P -->|Failed| R[Payment Failed]
+
+Q --> S[Bundler]
+
+S --> T[EntryPoint]
+
+T --> U[(Blockchain)]
+
+end
+```
+
 ## App Flow
 
 1. **Splash** — animated loading sequence on first load.
