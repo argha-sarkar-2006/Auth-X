@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import FlipFadeText from './component/Loadingpage'
 import SideRays from './component/SideRays'
 import { HeroLogo } from './component/herologo'
-import ElectricBorder from './component/ElectricBorder'
 import SplashCursor from './component/SplashCursor'
 import Dock from './component/Dock'
 import { VscHome, VscArchive, VscAccount, VscSettingsGear } from 'react-icons/vsc'
@@ -11,9 +10,9 @@ import LoginPage from './component/loginpage'
 import Documentation from './component/Documentation'
 import FaqPage from './component/FaqPage'
 import Setting from './component/setting'
+import Wallet from './component/Wallet'
 import { auth } from './firebase'
 import { onAuthStateChanged } from 'firebase/auth'
-import qrImg from './assets/qr.png'
 import './App.css'
 
 // ── Page indices (used to determine slide direction) ──────────────────────
@@ -145,62 +144,8 @@ function App() {
               <HeroLogo name="AuthX" subtitle="Get started" />
             </div>
 
-            {/* Account Details card */}
-            <ElectricBorder color="#7df9ff" speed={1} chaos={0.12} borderRadius={16} style={{ width: '100%' }}>
-              <div style={{ position: 'relative', zIndex: 1, padding: '2rem 2.5rem' }}>
-                <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>Account Details</h2>
-                <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'flex-start' }}>
-                  <img src={qrImg} alt="QR Code" style={{ width: 160, height: 160, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem', color: 'rgba(255,255,255,0.85)', fontSize: '1rem' }}>
-                    <div>
-                      <span style={{ opacity: 0.5, fontSize: '0.8rem', display: 'block', marginBottom: 4 }}>Wallet Address</span>
-                      <span style={{ fontFamily: 'monospace', fontSize: '1rem' }}>0x0000…0000</span>
-                    </div>
-                    <div>
-                      <span style={{ opacity: 0.5, fontSize: '0.8rem', display: 'block', marginBottom: 4 }}>Account Owner</span>
-                      <span>—</span>
-                    </div>
-                    <div>
-                      <span style={{ opacity: 0.5, fontSize: '0.8rem', display: 'block', marginBottom: 4 }}>Balance</span>
-                      <span>0.00 ETH</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </ElectricBorder>
-
-            {/* Send Transaction card */}
-            <ElectricBorder color="#EAB308" speed={1} chaos={0.12} borderRadius={16} style={{ width: '100%' }}>
-              <div style={{ position: 'relative', zIndex: 1, padding: '2rem 2.5rem' }}>
-                <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>Send Transaction</h2>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Receiver Account Address</label>
-                    <input
-                      type="text"
-                      placeholder="0x..."
-                      style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '11px 16px', color: '#fff', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Total Amount to Send</label>
-                    <input
-                      type="number"
-                      placeholder="0.00"
-                      style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '11px 16px', color: '#fff', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                    <button
-                      type="button"
-                      style={{ padding: '11px 32px', borderRadius: 999, border: 'none', background: '#EAB308', color: '#000', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}
-                    >
-                      Send
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </ElectricBorder>
+            {/* Wallet: account setup / details, send, history */}
+            <Wallet user={user} />
           </div>
 
           {/* ── Page overlays with directional transition ── */}
