@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { HeroLogo } from './herologo'
 import SideRays from './SideRays'
 import ProfileCard from './ProfileCard'
-import { db } from '../firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { getProfile, mergeProfile } from '../lib/profile'
 
 // ── Resize + compress an image File into a small JPEG data URL ──────────────
 // Keeps the payload comfortably under Firestore's ~1MB per-document limit by
@@ -52,34 +51,24 @@ export default function Setting({ onClose, user }) {
 
   const currentName = userName
 
-  // ── Load persisted profile (name + image) from Firestore on mount ────────
+  // ── Load persisted profile (name + image) from the local store on mount ──
   useEffect(() => {
-    let cancelled = false
-    async function load() {
-      if (!user?.uid) {
-        setLoading(false)
-        return
-      }
-      try {
-        const snap = await getDoc(doc(db, 'users', user.uid))
-        if (!cancelled && snap.exists()) {
-          const data = snap.data()
-          if (data.photoDataUrl) setProfileImage(data.photoDataUrl)
-          if (data.displayName) setUserName(data.displayName)
-        }
-      } catch (e) {
-        if (!cancelled) setError('Could not load your saved profile.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+    if (!user?.uid) {
+      setLoading(false)
+      return
     }
-    load()
-    return () => {
-      cancelled = true
+    try {
+      const data = getProfile(user.uid)
+      if (data.photoDataUrl) setProfileImage(data.photoDataUrl)
+      if (data.displayName) setUserName(data.displayName)
+    } catch (e) {
+      setError('Could not load your saved profile.')
+    } finally {
+      setLoading(false)
     }
   }, [user?.uid])
 
-  // ── Persist a change name to Firestore ───────────────────────────────────
+  // ── Persist a change name to the local store ─────────────────────────────
   const saveName = async () => {
     const next = draftName.trim()
     if (!next) return
@@ -87,7 +76,7 @@ export default function Setting({ onClose, user }) {
     setDraftName('')
     if (!user?.uid) return
     try {
-      await setDoc(doc(db, 'users', user.uid), { displayName: next }, { merge: true })
+      mergeProfile(user.uid, { displayName: next })
     } catch (e) {
       setError('Could not save your user name.')
     }
@@ -107,7 +96,7 @@ export default function Setting({ onClose, user }) {
       const dataUrl = await fileToResizedDataUrl(file)
       setProfileImage(dataUrl)
       if (user?.uid) {
-        await setDoc(doc(db, 'users', user.uid), { photoDataUrl: dataUrl }, { merge: true })
+        mergeProfile(user.uid, { photoDataUrl: dataUrl })
       }
     } catch (err) {
       setError(err?.message || 'Could not upload the image.')

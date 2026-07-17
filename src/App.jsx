@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import FlipFadeText from './component/Loadingpage'
 import SideRays from './component/SideRays'
 import { HeroLogo } from './component/herologo'
-import SplashCursor from './component/SplashCursor'
+import ElectricBorder from './component/ElectricBorder'
 import Dock from './component/Dock'
 import { VscHome, VscArchive, VscAccount, VscSettingsGear } from 'react-icons/vsc'
 import LoginPage from './component/loginpage'
@@ -11,8 +11,7 @@ import Documentation from './component/Documentation'
 import FaqPage from './component/FaqPage'
 import Setting from './component/setting'
 import Wallet from './component/Wallet'
-import { auth } from './firebase'
-import { onAuthStateChanged } from 'firebase/auth'
+import { onAuthChange, signOutUser } from './lib/auth'
 import './App.css'
 
 // ── Page indices (used to determine slide direction) ──────────────────────
@@ -55,7 +54,7 @@ function App() {
   const [currentPageIdx, setCurrentPageIdx] = useState(PAGE.HOME)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthChange((u) => {
       setUser(u)
       setAuthChecked(true)
     })
@@ -106,9 +105,6 @@ function App() {
 
   return (
     <>
-      {/* ── Fluid splash cursor — active on every page ── */}
-      <SplashCursor />
-
       {/* ── Checking session ── */}
       {!authChecked && (
         <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0a0a', color: 'rgba(255,255,255,0.5)', zIndex: 9999, fontSize: 14 }}>
@@ -136,6 +132,39 @@ function App() {
             <SideRays speed={2.5} rayColor1="#EAB308" rayColor2="#96c8ff" intensity={2} spread={2} origin="top-right" tilt={0} saturation={1.5} blend={0.75} falloff={1.6} opacity={1} />
           </div>
 
+          {/* Logout */}
+          <button
+            type="button"
+            onClick={() => signOutUser()}
+            title="Log out"
+            style={{
+              position: 'fixed',
+              top: 20,
+              right: 20,
+              zIndex: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '9px 16px',
+              borderRadius: 999,
+              border: '1px solid rgba(255,255,255,0.14)',
+              background: 'rgba(20,20,22,0.65)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              color: '#ffffff',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            Log out
+          </button>
+
           {/* Scrollable home layout */}
           <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'stretch', padding: '2rem 1.25rem 8rem', gap: '1.5rem', boxSizing: 'border-box' }}>
 
@@ -144,8 +173,41 @@ function App() {
               <HeroLogo name="AuthX" subtitle="Get started" />
             </div>
 
-            {/* Wallet: account setup / details, send, history */}
+            {/* Account Details / create-account flow */}
             <Wallet user={user} />
+
+            {/* Send Transaction card */}
+            <ElectricBorder color="#EAB308" speed={1} chaos={0.12} borderRadius={16} style={{ width: '100%' }}>
+              <div style={{ position: 'relative', zIndex: 1, padding: '2rem 2.5rem' }}>
+                <h2 style={{ margin: '0 0 1.5rem', fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>Send Transaction</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Receiver Account Address</label>
+                    <input
+                      type="text"
+                      placeholder="0x..."
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '11px 16px', color: '#fff', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Total Amount to Send</label>
+                    <input
+                      type="number"
+                      placeholder="0.00"
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '11px 16px', color: '#fff', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button
+                      type="button"
+                      style={{ padding: '11px 32px', borderRadius: 999, border: 'none', background: '#EAB308', color: '#000', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </ElectricBorder>
           </div>
 
           {/* ── Page overlays with directional transition ── */}

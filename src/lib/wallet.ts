@@ -1,188 +1,87 @@
-import { db } from "../firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  runTransaction,
-  serverTimestamp,
-  setDoc,
-  where,
-  type Timestamp,
-} from "firebase/firestore";
+import { readKey, writeKey } from "./localdb";
+import { mergeProfile } from "./profile";
 
-// A Sepolia testnet account. The address is the Firestore document id in the
-// `accounts` collection, which makes it globally unique — no two users can own
-// the same address. USD value is always 0 because this is a testnet.
+// Every new account is seeded with this Sepolia testnet balance.
+export const DEFAULT_BALANCE = 20.35;
+
+// An account. The wallet address is the unique key in the local `accounts`
+// store — no two users can register the same address. USD value is always 0
+// because this is a testnet.
 export interface Account {
   address: string;
   ownerUid: string;
   balance: number;
+  hasFaceVector: boolean;
 }
 
-export interface HistoryEntry {
-  id: string;
-  from: string;
-  to: string;
-  amount: number;
-  participants: string[];
-  createdAt: Timestamp | null;
+interface AccountRecord {
+  address: string;
+  ownerUid: string;
+  balance: number;
+  faceVector: number[];
+  createdAt: number;
 }
 
+const ACCOUNTS_KEY = "accounts";
 const HEX_ADDRESS = /^0x[a-fA-F0-9]{40}$/;
 
-export function isValidAddress(address: string): boolean {
-  return HEX_ADDRESS.test(address.trim());
-}
+export const isValidAddress = (a: string): boolean => HEX_ADDRESS.test(a.trim());
 
-// Look up the account owned by a given user, if they have created one.
-export async function getMyAccount(uid: string): Promise<Account | null> {
-  const snap = await getDocs(
-    query(collection(db, "accounts"), where("ownerUid", "==", uid))
-  );
-  if (snap.empty) return null;
-  const data = snap.docs[0].data();
+function all(): Record<string, AccountRecord> {
+  return readKey<Record<string, AccountRecord>>(ACCOUNTS_KEY, {});
+}
+function save(records: Record<string, AccountRecord>): void {
+  writeKey(ACCOUNTS_KEY, records);
+}
+function toAccount(r: AccountRecord): Account {
   return {
-    address: data.address,
-    ownerUid: data.ownerUid,
-    balance: data.balance,
+    address: r.address,
+    ownerUid: r.ownerUid,
+    balance: r.balance,
+    hasFaceVector: r.faceVector.length > 0,
   };
 }
 
-// One-time account creation. Fails if the user already owns an account or the
-// address is already taken by anyone (uniqueness is enforced by the doc id).
-export async function createAccount(
-  uid: string,
-  address: string,
-  balance: number
-): Promise<Account> {
-  const normalized = address.trim();
-  if (!isValidAddress(normalized)) {
-    throw new Error("Enter a valid address (0x followed by 40 hex characters).");
-  }
-  if (!Number.isFinite(balance) || balance < 0) {
-    throw new Error("Enter a valid, non-negative balance.");
-  }
-
-  const existing = await getMyAccount(uid);
-  if (existing) {
-    throw new Error("You already have an account. Address and balance are set once.");
-  }
-
-  const ref = doc(db, "accounts", normalized);
-  const taken = await getDoc(ref);
-  if (taken.exists()) {
-    throw new Error("That account address is already in use.");
-  }
-
-  const account: Account = { address: normalized, ownerUid: uid, balance };
-  await setDoc(ref, { ...account, createdAt: serverTimestamp() });
-  return account;
+// Look up the account owned by a user, if they have created one. Async so the
+// call sites (which awaited Firestore) keep working unchanged.
+export async function getMyAccount(uid: string): Promise<Account | null> {
+  const rec = Object.values(all()).find((r) => r.ownerUid === uid);
+  return rec ? toAccount(rec) : null;
 }
 
-// Atomically move Sepolia ETH from the sender to an existing receiver account,
-// updating both balances and recording the transfer in one shot.
-export async function sendEth(
-  fromAddress: string,
-  toAddress: string,
-  amount: number
-): Promise<void> {
-  const to = toAddress.trim();
-  if (!isValidAddress(to)) {
-    throw new Error("Enter a valid receiver address.");
-  }
-  if (to === fromAddress) {
-    throw new Error("You cannot send to your own account.");
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new Error("Enter an amount greater than 0.");
+// One-time account creation: stores the MetaMask address, the captured face
+// vector, and the seed balance. Fails if the user already has an account or the
+// address is already registered by anyone.
+export async function createAccount(params: {
+  uid: string;
+  address: string;
+  faceVector?: number[];
+}): Promise<Account> {
+  const address = params.address.trim();
+  if (!isValidAddress(address)) {
+    throw new Error("MetaMask returned an invalid wallet address.");
   }
 
-  const senderRef = doc(db, "accounts", fromAddress);
-  const receiverRef = doc(db, "accounts", to);
-  const txRef = doc(collection(db, "transactions"));
+  const records = all();
+  if (Object.values(records).some((r) => r.ownerUid === params.uid)) {
+    throw new Error("You already have an account.");
+  }
+  if (records[address]) {
+    throw new Error("That wallet address is already registered.");
+  }
 
-  await runTransaction(db, async (tx) => {
-    const senderSnap = await tx.get(senderRef);
-    const receiverSnap = await tx.get(receiverRef);
+  const faceVector = params.faceVector ?? [];
+  const record: AccountRecord = {
+    address,
+    ownerUid: params.uid,
+    balance: DEFAULT_BALANCE,
+    faceVector,
+    createdAt: Date.now(),
+  };
+  records[address] = record;
+  save(records);
+  // Link the account to the user's profile for easy lookup.
+  mergeProfile(params.uid, { accountAddress: address });
 
-    if (!senderSnap.exists()) throw new Error("Your account no longer exists.");
-    if (!receiverSnap.exists()) {
-      throw new Error("No account found for that receiver address.");
-    }
-
-    const senderBalance = senderSnap.data().balance as number;
-    const receiverBalance = receiverSnap.data().balance as number;
-
-    if (senderBalance < amount) {
-      throw new Error("Insufficient balance.");
-    }
-
-    tx.update(senderRef, { balance: senderBalance - amount });
-    tx.update(receiverRef, { balance: receiverBalance + amount });
-    tx.set(txRef, {
-      from: fromAddress,
-      to,
-      amount,
-      participants: [fromAddress, to],
-      createdAt: serverTimestamp(),
-    });
-  });
-}
-
-// Live-subscribe to the send/receive history for an account. Sorted newest
-// first on the client to avoid needing a composite Firestore index.
-export function subscribeHistory(
-  address: string,
-  onChange: (entries: HistoryEntry[]) => void,
-  onError?: (err: Error) => void
-): () => void {
-  const q = query(
-    collection(db, "transactions"),
-    where("participants", "array-contains", address)
-  );
-  return onSnapshot(
-    q,
-    (snap) => {
-      const entries = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          from: data.from,
-          to: data.to,
-          amount: data.amount,
-          participants: data.participants,
-          createdAt: data.createdAt ?? null,
-        } as HistoryEntry;
-      });
-      entries.sort((a, b) => {
-        const ta = a.createdAt?.toMillis?.() ?? 0;
-        const tb = b.createdAt?.toMillis?.() ?? 0;
-        return tb - ta;
-      });
-      onChange(entries);
-    },
-    (err) => onError?.(err as Error)
-  );
-}
-
-// Keep an account's balance in sync live (updates when a transfer lands).
-export function subscribeAccount(
-  address: string,
-  onChange: (account: Account | null) => void
-): () => void {
-  return onSnapshot(doc(db, "accounts", address), (snap) => {
-    if (!snap.exists()) {
-      onChange(null);
-      return;
-    }
-    const data = snap.data();
-    onChange({
-      address: data.address,
-      ownerUid: data.ownerUid,
-      balance: data.balance,
-    });
-  });
+  return toAccount(record);
 }

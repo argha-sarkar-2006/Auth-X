@@ -1,9 +1,5 @@
 import { useState, type FormEvent } from "react";
-import {
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-} from "firebase/auth";
-import { auth } from "../firebase";
+import { signIn, signUp } from "../lib/auth";
 
 type Mode = "login" | "signup";
 
@@ -33,16 +29,14 @@ const LoginPage = ({ onAuthed }: LoginPageProps) => {
 
     setSubmitting(true);
     try {
-      const cred =
+      const user =
         mode === "login"
-          ? await signInWithEmailAndPassword(auth, email, password)
-          : await createUserWithEmailAndPassword(auth, email, password);
-      onAuthed?.(cred.user.uid);
+          ? await signIn(email, password)
+          : await signUp(email, password);
+      onAuthed?.(user.uid);
     } catch (err: unknown) {
       const message =
-        err instanceof Error
-          ? err.message.replace(/^Firebase: /, "")
-          : "Authentication failed.";
+        err instanceof Error ? err.message : "Authentication failed.";
       setError(message);
     } finally {
       setSubmitting(false);
