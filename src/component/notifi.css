@@ -1,0 +1,88 @@
+/* Styling for notifi.tsx toasts. The component ships with Tailwind utility
+   classes but this project doesn't use Tailwind, so the toast is styled here
+   via the `authx-toast` className passed from App.jsx. Defaults to the green
+   success look; the destructive variant overrides the palette. */
+
+.authx-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 2rem);
+  max-width: 24rem;
+  min-height: 5rem;
+  border-radius: 12px;
+  padding: 16px 32px 16px 16px;
+  background: #052e16;
+  color: #dcfce7;
+  border: 1px solid #14532d;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  font-family: var(--sans, system-ui, sans-serif);
+}
+
+/* Destructive (error) variant — notifi.tsx adds its red Tailwind classes,
+   which we key off to swap the palette. */
+.authx-toast.bg-red-100 {
+  background: #450a0a;
+  color: #fee2e2;
+  border-color: #7f1d1d;
+}
+
+/* Icon + text row */
+.authx-toast > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Variant icon (lucide, h-5 w-5) */
+.authx-toast svg.h-5 {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #4ade80;
+  margin-top: 1px;
+}
+.authx-toast.bg-red-100 svg.h-5 {
+  color: #f87171;
+}
+
+.authx-toast .font-semibold {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.25;
+  margin-bottom: 4px;
+}
+
+.authx-toast .text-xs {
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+/* Close button */
+.authx-toast button[aria-label='Close'] {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+.authx-toast button[aria-label='Close']:hover {
+  opacity: 1;
+}
+.authx-toast button[aria-label='Close'] svg.h-4 {
+  width: 16px;
+  height: 16px;
+  display: block;
+}

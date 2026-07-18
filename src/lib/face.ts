@@ -1,11 +1,10 @@
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-// WASM runtime is pinned to the installed @mediapipe/tasks-vision version to
-// avoid a runtime/JS API mismatch. The model is Google's hosted face landmarker.
-const WASM_CDN =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+// The WASM runtime and model are served locally from public/mediapipe (the
+// wasm is copied from the installed @mediapipe/tasks-vision package, so the
+// runtime/JS API versions always match). No network/CDN access is needed.
+const WASM_PATH = "/mediapipe/wasm";
+const MODEL_URL = "/mediapipe/face_landmarker.task";
 
 let landmarkerPromise: Promise<FaceLandmarker> | null = null;
 
@@ -13,13 +12,17 @@ let landmarkerPromise: Promise<FaceLandmarker> | null = null;
 export function loadFaceLandmarker(): Promise<FaceLandmarker> {
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
-      const fileset = await FilesetResolver.forVisionTasks(WASM_CDN);
+      const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
       return FaceLandmarker.createFromOptions(fileset, {
         baseOptions: { modelAssetPath: MODEL_URL },
         runningMode: "IMAGE",
         numFaces: 1,
       });
     })();
+    // Don't cache a failed load — let the next capture attempt retry.
+    landmarkerPromise.catch(() => {
+      landmarkerPromise = null;
+    });
   }
   return landmarkerPromise;
 }

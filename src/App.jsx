@@ -1,6 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import FlipFadeText from './component/Loadingpage'
+import TxLoad, { TX_LOAD_DURATION } from './component/txload'
+import Failed from './component/failed'
+import FaceCapture from './component/FaceCapture'
+import { ToastContainer, toast } from './component/notifi'
+import { isValidAddress, accountExists, verifyFace, sendTransaction } from './lib/wallet'
+import './component/notifi.css'
 import SideRays from './component/SideRays'
 import { HeroLogo } from './component/herologo'
 import ElectricBorder from './component/ElectricBorder'
@@ -53,6 +59,20 @@ function App() {
   // Track current page index for direction calculation
   const [currentPageIdx, setCurrentPageIdx] = useState(PAGE.HOME)
 
+  // ── Send-transaction flow ────────────────────────────────────────────────
+  const [receiver, setReceiver] = useState('')
+  const [amount, setAmount] = useState('')
+  // txStep: idle | capturing | loading | failed
+  const [txStep, setTxStep] = useState('idle')
+  // null = face not validated yet, true/false = capture result
+  const [faceOk, setFaceOk] = useState(null)
+  // Set when Send was clicked before the face was validated, so the capture
+  // flows straight into the transaction.
+  const pendingSendRef = useRef(false)
+  // Bumped after every successful transfer so the Account Details card
+  // re-reads the balance.
+  const [walletRefresh, setWalletRefresh] = useState(0)
+
   useEffect(() => {
     const unsub = onAuthChange((u) => {
       setUser(u)
@@ -75,11 +95,131 @@ function App() {
     setActivePage(overlay)
   }
 
+  // ── Send-transaction handlers ────────────────────────────────────────────
+
+  // Task 1 — pasting a valid account address triggers live face validation,
+  // but only after the address is confirmed to exist in the local db.
+  const handleReceiverPaste = async (e) => {
+    const pasted = e.clipboardData?.getData('text')?.trim() || ''
+    if (!isValidAddress(pasted)) return
+    if (!(await accountExists(pasted))) {
+      toast({
+        title: 'Unknown address',
+        description: 'No account exists for that receiver address.',
+        variant: 'destructive',
+        position: 'top-right',
+        className: 'authx-toast',
+      })
+      return
+    }
+    setFaceOk(null)
+    pendingSendRef.current = false
+    setTxStep('capturing')
+  }
+
+  // Runs the loading page, then completes or fails the transaction.
+  const runTransaction = (ok) => {
+    setTxStep('loading')
+    setTimeout(async () => {
+      if (!ok) {
+        setTxStep('failed')
+        return
+      }
+      try {
+        await sendTransaction({ fromUid: user.uid, toAddress: receiver.trim(), amount: parseFloat(amount) })
+        setTxStep('idle')
+        toast({
+          title: 'Transaction Successful',
+          description: `Sent ${amount} ETH to ${receiver.trim().slice(0, 6)}…${receiver.trim().slice(-4)}`,
+          variant: 'success',
+          position: 'top-right',
+          className: 'authx-toast',
+        })
+        setReceiver('')
+        setAmount('')
+        setFaceOk(null)
+        setWalletRefresh((n) => n + 1)
+      } catch (err) {
+        setTxStep('idle')
+        toast({
+          title: 'Transaction Failed',
+          description: err?.message || 'Something went wrong.',
+          variant: 'destructive',
+          position: 'top-right',
+          className: 'authx-toast',
+        })
+      }
+    }, TX_LOAD_DURATION)
+  }
+
+  // Live face captured → match it against the vector saved with the account.
+  const onTxFaceCaptured = async (vec) => {
+    const ok = await verifyFace(user.uid, vec)
+    setFaceOk(ok)
+    if (pendingSendRef.current) {
+      // Send was already clicked — go straight into the transaction.
+      pendingSendRef.current = false
+      runTransaction(ok)
+    } else if (ok) {
+      setTxStep('idle')
+    } else {
+      // Task 4 — face vector doesn't match → failed page.
+      setTxStep('failed')
+    }
+  }
+
+  const onTxFaceCancelled = () => {
+    pendingSendRef.current = false
+    setTxStep('idle')
+  }
+
+  const handleSend = async () => {
+    if (!isValidAddress(receiver)) {
+      toast({
+        title: 'Invalid address',
+        description: 'Paste a valid receiver account address (0x…).',
+        variant: 'destructive',
+        position: 'top-right',
+        className: 'authx-toast',
+      })
+      return
+    }
+    if (!(await accountExists(receiver))) {
+      toast({
+        title: 'Unknown address',
+        description: 'No account exists for that receiver address.',
+        variant: 'destructive',
+        position: 'top-right',
+        className: 'authx-toast',
+      })
+      return
+    }
+    const amt = parseFloat(amount)
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast({
+        title: 'Invalid amount',
+        description: 'Enter an amount greater than zero.',
+        variant: 'destructive',
+        position: 'top-right',
+        className: 'authx-toast',
+      })
+      return
+    }
+    if (faceOk === null) {
+      // Face not validated yet (address typed, not pasted) — capture first.
+      pendingSendRef.current = true
+      setTxStep('capturing')
+      return
+    }
+    runTransaction(faceOk)
+  }
+
   const dockItems = [
     {
       icon: <VscHome size={18} />,
       label: 'Home',
       onClick: () => {
+        setTxStep('idle')
         navigateTo(PAGE.HOME, null)
         setTimeout(() => document.getElementById('center')?.scrollIntoView({ behavior: 'smooth' }), 50)
       },
@@ -174,7 +314,7 @@ function App() {
             </div>
 
             {/* Account Details / create-account flow */}
-            <Wallet user={user} />
+            <Wallet user={user} refreshKey={walletRefresh} />
 
             {/* Send Transaction card */}
             <ElectricBorder color="#EAB308" speed={1} chaos={0.12} borderRadius={16} style={{ width: '100%' }}>
@@ -186,20 +326,32 @@ function App() {
                     <input
                       type="text"
                       placeholder="0x..."
+                      value={receiver}
+                      onChange={(e) => {
+                        setReceiver(e.target.value)
+                        setFaceOk(null)
+                      }}
+                      onPaste={handleReceiverPaste}
                       style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '11px 16px', color: '#fff', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                     />
+                    {faceOk === true && (
+                      <span style={{ display: 'block', marginTop: 6, fontSize: '0.78rem', color: '#7dffb0' }}>Face verified ✓</span>
+                    )}
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>Total Amount to Send</label>
                     <input
                       type="number"
                       placeholder="0.00"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
                       style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '11px 16px', color: '#fff', fontSize: '1rem', outline: 'none', boxSizing: 'border-box' }}
                     />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                     <button
                       type="button"
+                      onClick={handleSend}
                       style={{ padding: '11px 32px', borderRadius: 999, border: 'none', background: '#EAB308', color: '#000', fontWeight: 700, fontSize: '1rem', cursor: 'pointer' }}
                     >
                       Send
@@ -254,8 +406,25 @@ function App() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* ── Transaction flow overlays (dock stays visible above them) ── */}
+          {txStep === 'capturing' && (
+            <FaceCapture onCapture={onTxFaceCaptured} onCancel={onTxFaceCancelled} />
+          )}
+          {txStep === 'loading' && <TxLoad />}
+          {txStep === 'failed' && (
+            <Failed
+              onRetry={() => {
+                setFaceOk(null)
+                setTxStep('capturing')
+              }}
+            />
+          )}
         </>
       )}
+
+      {/* ── Toast notifications (notifi.tsx) ── */}
+      <ToastContainer />
 
       {/* ── Dock — always visible ── */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10000, display: 'flex', justifyContent: 'center', paddingBottom: '16px', pointerEvents: 'none' }}>

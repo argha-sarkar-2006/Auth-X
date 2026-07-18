@@ -8,7 +8,9 @@ import { createAccount, getMyAccount, DEFAULT_BALANCE } from '../lib/wallet'
 const shorten = (addr) =>
   addr && addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr || '—'
 
-export default function Wallet({ user }) {
+// refreshKey: bump it to make the wallet re-read the account (e.g. after a
+// transfer changes the balance).
+export default function Wallet({ user, refreshKey = 0 }) {
   const uid = user?.uid
 
   const [account, setAccount] = useState(null)
@@ -19,7 +21,7 @@ export default function Wallet({ user }) {
   const [error, setError] = useState(null)
   const [pendingAddress, setPendingAddress] = useState(null)
 
-  // ── Load the user's account once on mount ──────────────────────────────
+  // ── Load the user's account on mount and after every transfer ──────────
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -40,7 +42,7 @@ export default function Wallet({ user }) {
     return () => {
       cancelled = true
     }
-  }, [uid])
+  }, [uid, refreshKey])
 
   // Step 1 — pull the wallet address from MetaMask (only happens here, once,
   // since the create flow only runs when the user has no account yet).
